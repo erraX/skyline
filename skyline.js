@@ -54,10 +54,12 @@
     Module.prototype = {
         load: function () {
             // wait deps loaded
-            var depsValue = this.loadDeps();
+            if (this.deps && this.deps.length) {
+                var depsValue = this.loadDeps();
+            }
 
             // execute factory
-            this.exportValue = factory.apply(global, depsValue);
+            this.exportValue = this.factory.apply(global, depsValue);
         },
 
         loadScript: function (id) {
@@ -67,19 +69,32 @@
             script.type = 'text/javascript';
 
             // Only support `js`
-            script.src = path + '.js';
+            script.src = id + '.js';
 
             script.onload = function () {
                 // TODO: 
                 //  1. new Module
                 //  2. load depencencies
+
+                // modules[id] = new Module(id, undefined, undefiend);
+                // modules[id].load();
+                console.log(modules);
             };
 
             head.appendChild(script);
         },
 
         loadDeps: function () {
-        
+            var i;
+
+            for (i = 0; i < this.deps.length; i++) {
+                var id = this.deps[i];
+
+                // module is not loaded
+                if (!cache.hasOwnProperty(id)) {
+                    this.loadScript(id);
+                }
+            }
         },
     };
 
@@ -95,6 +110,7 @@
         if (isArray(deps) && isFunction(factory)) {
 
             // require deps and factory
+            define('@main', deps, factory);
         }
         else if (isString(deps)) {
             // require a string
@@ -112,10 +128,6 @@
         return path;
     };
 
-    function resolveUrl(id) {
-    
-    }
-
     /**
      * Define a module
      *
@@ -132,7 +144,7 @@
         var args = [].slice.call(arguments);
         var argsLen = args.length;
 
-        // last must be function
+        // last param: `factory` must be a function
         if (!isFunction(args[argsLen - 1])) {
             throw new Error('Module factory must be a function.');
         }
@@ -150,9 +162,11 @@
             id = undefined;
         }
 
-
         var module = new Module(id, deps, factory);
         module.load();
+
+        modules[id] = module;
+
         return module;
     }
 

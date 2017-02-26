@@ -4,7 +4,6 @@
  * @author niminjie(niminjiecide@gmail.com)
  */
 
-
 (function (global) {
 
     'use strict';
@@ -23,6 +22,15 @@
         return toString.call(target) === '[object String]';
     }
 
+    function exportAllValues() {
+        var i;
+        var module;
+
+        for (i = newModules.length; i--;) {
+            newModules[i].exportValue();
+        }
+    }
+
     /**
      * Cache modules
      *
@@ -31,11 +39,18 @@
     var cache = {};
 
     /**
-     * Load modules
+     * New modules
      *
      * @type {Object<string:Module>}
      */
-    var modules = {};
+    var defQueue = [];
+
+    /**
+     * New modules
+     *
+     * @type {Object<string:Module>}
+     */
+    var newModules = [];
 
     /**
      *
@@ -63,6 +78,7 @@
         },
 
         loadScript: function (id) {
+            // debugger
             var head = document.getElementsByTagName('head')[0];
 
             var script = document.createElement('script');
@@ -72,19 +88,27 @@
             script.src = id + '.js';
 
             script.onload = function () {
-                // TODO: 
-                //  1. new Module
-                //  2. load depencencies
+                // debugger
+                var module = defQueue.pop();
 
-                // modules[id] = new Module(id, undefined, undefiend);
-                // modules[id].load();
-                console.log(modules);
+                if (!module.id) {
+                    module.id = id;
+                    cache[id] = module;
+                    newModules.push(module);
+                }
+
+                exportAllValues();
             };
 
             head.appendChild(script);
         },
 
         loadDeps: function () {
+            // debugger
+            if (!this.deps || !this.deps.length) {
+                return;
+            }
+
             var i;
 
             for (i = 0; i < this.deps.length; i++) {
@@ -96,6 +120,41 @@
                 }
             }
         },
+
+        checkDeps: function () {
+            var i;
+
+            if (this.deps && this.deps.length) {
+                for (i = 0; i < this.deps.length; i++) {
+                    if (!cache[this.deps[i]] || !cache[this.deps[i]].load) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        },
+
+        exportValue: function () {
+            var i;
+            var exportValue;
+            var depValues = [];
+
+            if (!this.checkDeps()) {
+                return;
+            }
+
+            if (this.deps && this.deps.length) {
+                for (i = 0; i < this.deps.length; i++) {
+                    depValues.push(cache[this.deps[i]].exports);
+                }
+            }
+
+            exportValue = this.factory.apply(global, depValues);
+
+            this.exports = exportValue;
+            this.load = true;
+        }
     };
 
     /**
@@ -162,19 +221,51 @@
             id = undefined;
         }
 
-        var module = new Module(id, deps, factory);
-        module.load();
+        // debugger
+        var module = new Module(id, deps, factory)
+        defQueue.push(module);
 
-        modules[id] = module;
-
-        return module;
+        module.loadDeps();
     }
 
     define.amd = {
         version: '0.1beta'
     };
 
+    var dataMain;
+
+    (function executeMainScript() {
+        var i;
+        var scripts = document.getElementsByTagName('script');
+        var head = document.getElementsByTagName('head')[0];
+
+        for (i = 0; i < scripts.length; i++) {
+            dataMain = scripts[i].getAttribute('data-main');
+
+            if (dataMain) {
+                // Main entry
+                var script = document.createElement('script');
+                script.type = 'text/javascript';
+                script.src = dataMain;
+
+                script.onload = function () {
+                    var module = defQueue.pop();
+
+                    if (!module.id) {
+                        module.id = dataMain;
+                        cache[dataMain] = module;
+                        newModules.push(module);
+                    }
+
+                    exportAllValues();
+                };
+
+                head.appendChild(script);
+                break;
+            }
+        }
+    })();
+
     global.require = require;
     global.define = define;
-
 })(this);
